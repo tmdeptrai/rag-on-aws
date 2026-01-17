@@ -1,9 +1,20 @@
-# Project: "Titanium RAG" - Self-Hosted Serverless Architect
+Vector DB: Upstash
+* [x] Create an account with free plan
+* [x] Create Gemini API key for embeddings
+* [x] Connect to Upstash, see [here](/src/db_init/db_init.py)
 
-**Goal:** A secure, observable, scale-to-zero RAG application for 1-10 users.
-**Stack:** AWS (S3, Lambda, Cognito), Upstash (Vector DB), Google Gemini (AI), Streamlit (UI).
+Authentication
+* [x] Create Amazon Cognito user pool id and client id
+* [x] Connect to it
+* [x] Sign up
+* [x] Log in
+* [x] Forgot password
 
----
+
+
+
+
+
 
 ## 1. System Architecture
 
