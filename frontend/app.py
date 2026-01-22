@@ -87,8 +87,6 @@ def login_view():
                 st.session_state.user_email = email # Store for S3 folder path
                 st.success("Logged in!")
                 
-                time.sleep(2)
-                
                 st.rerun() # Trigger reload to show Home Page
             else:
                 st.error(result)
@@ -220,8 +218,6 @@ def home_page():
                 # answer = response.json().get("answer", "Error from API")
                 
                 # Mock response for UI testing
-                import time
-                time.sleep(1) 
                 answer = "I am a placeholder bot. Connect your Lambda API to make me smart!" 
                 
                 message_placeholder.markdown(answer)
