@@ -87,6 +87,8 @@ def login_view():
                 st.session_state.user_email = email # Store for S3 folder path
                 st.success("Logged in!")
                 
+                time.sleep(2)
+                
                 st.rerun() # Trigger reload to show Home Page
             else:
                 st.error(result)
@@ -218,6 +220,8 @@ def home_page():
                 # answer = response.json().get("answer", "Error from API")
                 
                 # Mock response for UI testing
+                import time
+                time.sleep(1) 
                 answer = "I am a placeholder bot. Connect your Lambda API to make me smart!" 
                 
                 message_placeholder.markdown(answer)
@@ -255,7 +259,7 @@ else:
         if is_valid:
             st.session_state.token = cookie_token
             st.session_state.user_email = email
-            st.rerun()
+            st.rerun() # Success! Reload to show Home Page
         else:
             # Token invalid -> Delete it
             try:
@@ -263,6 +267,7 @@ else:
             except KeyError:
                 pass
 
+    # 2. If no valid cookie, show Login
     st.title("RAG on AWS")
     if st.session_state.auth_view == "login":
         login_view()
