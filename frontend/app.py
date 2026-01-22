@@ -1,18 +1,13 @@
-import sys
 import os
+import time
 from dotenv import load_dotenv
 load_dotenv()
 import streamlit as st
 import boto3
-import requests
 from botocore.exceptions import ClientError
+import extra_streamlit_components as stx
 
-# --- PATH SETUP ---
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-from src.auth import auth_handler
+import auth_client
 
 # # --- CONFIGURATION ---
 # # Replace with your actual Lambda URL (from your deployment)
@@ -38,15 +33,20 @@ if "announcement" not in st.session_state:
     st.session_state.announcement = ""
 
 # --- HELPER FUNCTIONS ---
+cookie_manager = stx.CookieManager(key="cookie_manager")
+
 def switch_view(view_name):
     st.session_state.auth_view = view_name
     st.rerun()
 
 def logout():
-    st.session_state.announcement = ""
     st.session_state.token = None
+    st.session_state.user_email = None
     st.session_state.auth_view = "login"
     st.session_state.messages = []
+    
+    st.session_state['logout_pending'] = True
+    
     st.rerun()
 
 # def upload_to_s3(file_obj):
@@ -77,11 +77,18 @@ def login_view():
     
     if col1.button("Login"):        
         if email and password:
-            success, result = auth_handler.login(email, password)
+            success, result = auth_client.login(email, password)
             if success:
-                st.session_state.token = result['IdToken']
+                token = result['AccessToken']
+
+                st.session_state.token = token
+                cookie_manager.set('auth_token',token,key="set_auth_token")
+                
                 st.session_state.user_email = email # Store for S3 folder path
                 st.success("Logged in!")
+                
+                time.sleep(2)
+                
                 st.rerun() # Trigger reload to show Home Page
             else:
                 st.error(result)
@@ -93,15 +100,15 @@ def login_view():
 
 def register_view():
     st.subheader("Create Account")
-    new_email = st.text_input("Email")
-    new_pass = st.text_input("Password", type="password")
-    confirm_password = st.text_input("Confirm Password", type="password", key="login_pass")
+    new_email = st.text_input("Email", key="register_email")
+    new_pass = st.text_input("Password", type="password", key="register_pass")
+    confirm_password = st.text_input("Confirm Password", type="password", key="register_confirm_pass")
     
     if st.button("Sign Up"):
         if new_pass != confirm_password:
             st.warning("Passwords did not match, try again")
         else:
-            success, msg = auth_handler.register(new_email, new_pass)
+            success, msg = auth_client.register(new_email, new_pass)
             if success:
                 st.success(msg)
                 st.session_state.pending_email = new_email
@@ -118,7 +125,7 @@ def verify_view():
     code = st.text_input("Verification Code")
     
     if st.button("Confirm"):
-        success, msg = auth_handler.verify(email, code)
+        success, msg = auth_client.verify(email, code)
         if success:
             st.success(msg)
             st.session_state.announcement = f"Your email has been confirmed, you can now log in."
@@ -132,7 +139,7 @@ def forgot_password_view():
     email = st.text_input("Email")
     
     if st.button("Send Reset Code"):
-        success, msg = auth_handler.forgot_password(email)
+        success, msg = auth_client.forgot_password(email)
         if success:
             st.info(msg)
             st.session_state.pending_email = email
@@ -153,7 +160,7 @@ def confirm_forgot_view():
     
     if st.button("Change Password"):
         if new_pass == confirm_new_pass:
-            success, msg = auth_handler.confirm_forgot_password(email, code, new_pass)
+            success, msg = auth_client.confirm_forgot_password(email, code, new_pass)
             if success:
                 st.success("Password changed! Please login.")
                 st.session_state.announcement = f"Your password has been successfully updated."
@@ -223,10 +230,44 @@ def home_page():
                 message_placeholder.error(f"Connection Error: {e}")
 
 # --- MAIN ROUTER ---
-if st.session_state.token:
+# CASE A: We are in the middle of a logout
+if st.session_state.get('logout_pending'):
+    try:
+        cookie_manager.delete('auth_token')
+    except KeyError:
+        pass
+    
+    del st.session_state['logout_pending']
+    
+    st.title("RAG on AWS")
+    login_view()
+
+
+# CASE B: We are logged in (Session State exists)
+elif st.session_state.token:
     home_page()
+
+
+# CASE C: We are not logged in, check for cookies (Auto-Login)
 else:
-    st.title("RAG on AWS by Tran Minh Duong")
+    cookies = cookie_manager.get_all()
+    cookie_token = cookies.get("auth_token")
+
+    if cookie_token:
+        is_valid, email = auth_client.check_token(cookie_token)
+        
+        if is_valid:
+            st.session_state.token = cookie_token
+            st.session_state.user_email = email
+            st.rerun()
+        else:
+            # Token invalid -> Delete it
+            try:
+                cookie_manager.delete("auth_token")
+            except KeyError:
+                pass
+
+    st.title("RAG on AWS")
     if st.session_state.auth_view == "login":
         login_view()
     elif st.session_state.auth_view == "register":
