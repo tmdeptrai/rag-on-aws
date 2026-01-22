@@ -69,3 +69,21 @@ def confirm_forgot_password(email, code, new_password) -> list[bool, str]:
         return True, "Password changed successfully."
     except ClientError as e:
         return False, e.response['Error']['Message']
+    
+def check_token(token)->list[bool,str]:
+    """
+    Validate a token using Cognito
+    Returns: (is_valid,user_email)
+    """
+    try:
+        response =  st.session_state.cognito_client.get_user(
+            AccessToken = token
+        )
+        email="unknown"
+        for attr in response["UserAttributes"]:
+            if attr['Name'] == 'email':
+                email = attr['Value']
+        
+        return True,email
+    except ClientError:
+        return False, None #expired token or invalid        
