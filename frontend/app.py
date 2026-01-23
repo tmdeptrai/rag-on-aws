@@ -8,11 +8,7 @@ from botocore.exceptions import ClientError
 import extra_streamlit_components as stx
 
 import auth_client
-
-# # --- CONFIGURATION ---
-# # Replace with your actual Lambda URL (from your deployment)
-# API_BASE_URL = "https://example-id.lambda-url.us-east-1.on.aws/" 
-# BUCKET_NAME = "your-bucket-name" # Update this!
+from file_upload import upload_to_s3, show_document_sidebar
 
 st.set_page_config(page_title="RAG-on-aws", page_icon="🤖")
 
@@ -21,6 +17,16 @@ if 'cognito_client' not in st.session_state:
         'cognito-idp',
         region_name=os.getenv("AWS_REGION")
     )
+
+if 's3_client' not in st.session_state:
+    st.session_state.s3_client = boto3.client(
+        's3',
+        region_name = os.getenv("AWS_REGION"),
+        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY")
+    )
+
+BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
 
 # --- SESSION STATE SETUP ---
 if "token" not in st.session_state:
@@ -48,21 +54,6 @@ def logout():
     st.session_state['logout_pending'] = True
     
     st.rerun()
-
-# def upload_to_s3(file_obj):
-#     """Uploads file using direct S3 access (easiest for V1)"""
-#     try:
-#         s3 = boto3.client('s3', region_name=st.secrets["AWS_REGION"])
-#         user_email = st.session_state.get('user_email', 'unknown')
-#         # Structure: documents/email/filename
-#         key = f"documents/{user_email}/{file_obj.name}"
-        
-#         s3.upload_fileobj(file_obj, BUCKET_NAME, key)
-#         return True, "File uploaded! AI is processing it..."
-#     except Exception as e:
-#         return False, str(e)
-
-# --- VIEWS ---
 
 def login_view():
     st.subheader("Login")
@@ -172,6 +163,7 @@ def confirm_forgot_view():
 def home_page():
     st.sidebar.title("RAG Chatbot")
     st.sidebar.caption(f"User: {st.session_state.get('user_email')}")
+    show_document_sidebar()
     
     # --- Sidebar: Upload ---
     st.sidebar.divider()
@@ -179,11 +171,11 @@ def home_page():
     uploaded_file = st.sidebar.file_uploader("Choose PDF", type="pdf")
     if uploaded_file and st.sidebar.button("Upload"):
         with st.spinner("Uploading..."):
-            # success, msg = upload_to_s3(uploaded_file)
-            # if success:
-            #     st.sidebar.success(msg)
-            # else:
-            #     st.sidebar.error(msg)
+            success, msg = upload_to_s3(uploaded_file)
+            if success:
+                st.sidebar.success(msg)
+            else:
+                st.sidebar.error(msg)
             pass
     
     st.sidebar.divider()
