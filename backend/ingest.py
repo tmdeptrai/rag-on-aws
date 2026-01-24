@@ -1,11 +1,11 @@
-import sys,os 
+import os,sys
 current_dir = os.path.dirname(os.path.abspath(__file__))
-backend_dir = os.path.dirname(current_dir)
-if backend_dir not in sys.path:
-    sys.path.append(backend_dir)
-from shared.db_connect import get_graph_db, get_vector_db
+project_root = os.path.dirname(current_dir)
+if project_root not in sys.path:
+    sys.path.append(project_root)
+    
+from utils.db_connect import get_graph_db, get_vector_db
 
-import json
 import boto3
 import io
 from pypdf import PdfReader
@@ -15,7 +15,6 @@ from langchain_experimental.graph_transformers import LLMGraphTransformer
 from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
 load_dotenv()
-
 
 s3_client = boto3.client('s3')
 
@@ -41,7 +40,7 @@ def lambda_handler(event, context):
     graph_db = get_graph_db()
     
     llm = ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash", 
+        model="gemini-2.0-flash", 
         temperature=0,
         google_api_key=os.environ["GEMINI_API_KEY"]
     )
@@ -67,7 +66,7 @@ def lambda_handler(event, context):
                 text += page.extract_text() + "\n"
             
             if not text.strip():
-                print(f"⚠️ Warning: No text found in {key}. Skipping.")
+                print(f"Warning: No text found in {key}. Skipping.")
                 continue
 
             # C. Chunking
@@ -80,14 +79,14 @@ def lambda_handler(event, context):
             splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
             chunks = splitter.split_documents([doc])
             
-            print(f"🧩 Split into {len(chunks)} chunks.")
+            print(f"Split into {len(chunks)} chunks.")
 
             # D. Ingest into Upstash (Vector)
-            print("   -> 💾 Ingesting into Vector DB...")
+            print("   -> Ingesting into Vector DB...")
             vector_db.add_documents(chunks, namespace=user_email)
             
             # E. Ingest into Neo4j (Graph)
-            print("   -> 🕸️ Extracting Graph Structure (This might take a moment)...")
+            print("   -> Extracting Graph Structure (This might take a moment)...")
             graph_docs = llm_transformer.convert_to_graph_documents(chunks)
             graph_db.add_graph_documents(
                 graph_docs, 
@@ -100,24 +99,19 @@ def lambda_handler(event, context):
 
         except Exception as e:
             update_status(bucket, key, "failed")
-            print(f"❌ Error: {e}")
+            print(f"Error: {e}")
             raise e
 
     return {"status": "success", "files_processed": len(event['Records'])}
 
-# --- LOCAL TEST RUNNER ---
-# This allows you to run "python backend/handlers/ingest.py" to test it!
 if __name__ == "__main__":
-    print("🧪 Running in Local Test Mode")
-    
-    # 1. Create a dummy S3 event looking exactly like AWS would send it
+    print("Running in Local Test Mode")
     test_event = {
         "Records": [
             {
                 "s3": {
                     "bucket": {"name": os.environ.get("S3_BUCKET_NAME")},
-                    # Make sure this file actually exists in your S3 for the test!
-                    "object": {"key": "documents/test_user/test_document.pdf"} 
+                    "object": {"key": "documents/minhduongqo@gmail.com/c25ac0a9_FUN-FACTS-SHEET.pdf"} 
                 }
             }
         ]
