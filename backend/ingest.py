@@ -111,7 +111,7 @@ if __name__ == "__main__":
             {
                 "s3": {
                     "bucket": {"name": os.environ.get("S3_BUCKET_NAME")},
-                    "object": {"key": "documents/minhduongqo@gmail.com/b7c50dc4_FUN-FACTS-SHEET.pdf"} 
+                    "object": {"key": "documents/minhduongqo@gmail.com/c25ac0a9_FUN-FACTS-SHEET.pdf"} 
                 }
             }
         ]

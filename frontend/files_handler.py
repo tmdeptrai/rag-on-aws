@@ -80,6 +80,11 @@ def get_presigned_url(key):
 
 def delete_file(key):
     """Deletes file from S3 -> Pinecone -> Neo4j"""
+    user_email = st.session_state.get('user_email')
+    if not user_email:
+        st.error("User email not found in session.")
+        return False
+    
     vector_db, graph_db = get_cached_dbs()
     success = True
     status_msg = []
@@ -95,12 +100,12 @@ def delete_file(key):
     
     #Delete from pinecone
     try:
-        # Try native LangChain delete first (if supported by your version)
-        vector_db.delete(filter={"source": key}) 
-        
-        # Fallback to direct index access (common for precise metadata deletion)
-        # We access the raw pinecone index object inside the wrapper
-        # vector_db.index.delete(filter={"source": key})
+        vector_db.index.delete(
+            filter={
+                "source": key,
+            },
+            namespace=user_email
+        )
         
         status_msg.append("Vectors deleted")
     except Exception as e:
@@ -110,7 +115,11 @@ def delete_file(key):
     
     #Neo4j
     try:
-        query = "MATCH (n) WHERE n.source = $key DETACH DELETE n"
+        query = """
+            MATCH (d:Document) 
+            WHERE d.source = $key 
+            DETACH DELETE d
+        """
         graph_db.query(query,params={"key":key})
         status_msg.append("Graph nodes deleted")
     except Exception as e:
@@ -188,7 +197,7 @@ def show_document_sidebar():
                     st.link_button("View PDF", url, help="Open in new tab")
                 
                 # DELETE
-                if st.button("🗑️ Delete", key=f"del_{key}", type="primary"):
+                if st.button("Delete", key=f"del_{key}", type="primary"):
                     if delete_file(key):
                         st.success("Deleted!")
                         st.rerun()
