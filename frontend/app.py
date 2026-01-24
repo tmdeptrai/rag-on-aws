@@ -8,7 +8,7 @@ from botocore.exceptions import ClientError
 import extra_streamlit_components as stx
 
 import auth_client
-from file_upload import upload_to_s3, show_document_sidebar
+from files_handler import upload_to_s3, show_document_sidebar
 
 st.set_page_config(page_title="RAG-on-aws", page_icon="🤖")
 

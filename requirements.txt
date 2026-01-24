@@ -3,7 +3,8 @@ langchain-community
 langchain-google-genai
 langchain-neo4j
 langchain-experimental
-upstash_vector
+langchain-pinecone 
+pinecone
 neo4j
 boto3
 streamlit
