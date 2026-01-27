@@ -1,0 +1,4 @@
+google-genai
+pinecone
+neo4j
+python-dotenv

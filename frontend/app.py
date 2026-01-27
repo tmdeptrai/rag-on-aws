@@ -9,7 +9,7 @@ import extra_streamlit_components as stx
 
 import auth_client
 from files_handler import upload_to_s3, show_document_sidebar
-
+from api import query_rag_bot
 st.set_page_config(page_title="RAG-on-aws", page_icon="🤖")
 
 if 'cognito_client' not in st.session_state:
@@ -189,6 +189,7 @@ def home_page():
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+            # Optional: If you saved references in history, you could show them here too
 
     # Chat Input
     if prompt := st.chat_input("Ask a question..."):
@@ -197,30 +198,45 @@ def home_page():
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # 2. Bot Response (Simulated)
+        # 2. Bot Response
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
-            message_placeholder.markdown("Thinking...")
+            message_placeholder.markdown("🔍 *Searching Knowledge Graph & Vector DB...*")
             
-            try:
-                # UNCOMMENT THIS WHEN LAMBDA IS READY
-                # response = requests.post(
-                #     API_BASE_URL,
-                #     json={"question": prompt},
-                #     headers={"Authorization": f"Bearer {st.session_state.token}"}
-                # )
-                # answer = response.json().get("answer", "Error from API")
+            # --- CALL THE API ---
+            user_email = st.session_state.get('user_email', 'default_user')
+            
+            # Pass the full session state messages so the bot has context
+            data = query_rag_bot(prompt, user_email, st.session_state.messages)
+            
+            # --- HANDLE RESPONSE ---
+            if "error" in data:
+                message_placeholder.error(data["error"])
+            else:
+                answer = data.get("answer", "No answer found.")
+                references = data.get("references", [])
                 
-                # Mock response for UI testing
-                import time
-                time.sleep(1) 
-                answer = "I am a placeholder bot. Connect your Lambda API to make me smart!" 
-                
+                # A. Show the Answer
                 message_placeholder.markdown(answer)
-                st.session_state.messages.append({"role": "assistant", "content": answer})
-            except Exception as e:
-                message_placeholder.error(f"Connection Error: {e}")
+                
+                # B. Show the Sources (The "Magic" Part)
+                if references:
+                    with st.expander(f"📚 Cited {len(references)} Sources (Vector + Graph)"):
+                        for i, ref in enumerate(references):
+                            # Icons for visual flair
+                            icon = "🕸️" if ref['type'] == 'graph' else "📄"
+                            score_val = float(ref.get('score', 0))
+                            color = "green" if score_val > 0.8 else "orange"
+                            
+                            st.markdown(f"**{i+1}. {icon} {ref['type'].title()}** <span style='color:{color}'>({score_val:.2f})</span>", unsafe_allow_html=True)
+                            st.caption(f"Source: *{ref['source']}*")
+                            st.code(ref['content'], language="text")
+                            st.divider()
 
+                # C. Save to History
+                # We save the plain answer to history. 
+                # (Saving references to session_state is complex, so we skip it for now)
+                st.session_state.messages.append({"role": "assistant", "content": answer})
 # --- MAIN ROUTER ---
 # CASE A: We are in the middle of a logout
 if st.session_state.get('logout_pending'):

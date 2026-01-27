@@ -44,7 +44,7 @@ def lambda_handler(event, context):
         temperature=0,
         google_api_key=os.environ["GEMINI_API_KEY"]
     )
-    llm_transformer = LLMGraphTransformer(llm=llm)
+    llm_transformer = LLMGraphTransformer(llm=llm,strict_mode=False)
 
     for record in event['Records']:
         bucket = record['s3']['bucket']['name']
@@ -81,18 +81,32 @@ def lambda_handler(event, context):
             
             print(f"Split into {len(chunks)} chunks.")
 
-            # D. Ingest into Upstash (Vector)
+            # D. Ingest into Pinecone (Vector)
             print("   -> Ingesting into Vector DB...")
             vector_db.add_documents(chunks, namespace=user_email)
             
             # E. Ingest into Neo4j (Graph)
             print("   -> Extracting Graph Structure (This might take a moment)...")
             graph_docs = llm_transformer.convert_to_graph_documents(chunks)
+            
+            for graph_doc in graph_docs:
+                # Get metadata from the source text chunk
+                metadata = graph_doc.source.metadata 
+                source_file = metadata.get("source", "unknown")
+                user_email = metadata.get("user_email", "unknown")
+                
+                for node in graph_doc.nodes:
+                    # Force properties onto the node itself
+                    node.properties["source"] = source_file
+                    node.properties["user_email"] = user_email
+                    
+            # 3. Now add to database
             graph_db.add_graph_documents(
                 graph_docs, 
                 baseEntityLabel=True, 
-                include_source=True
+                include_source=True 
             )
+            
             
             update_status(bucket, key, "ready")
             print(f"Finished {key}")
@@ -111,7 +125,7 @@ if __name__ == "__main__":
             {
                 "s3": {
                     "bucket": {"name": os.environ.get("S3_BUCKET_NAME")},
-                    "object": {"key": "documents/minhduongqo@gmail.com/c25ac0a9_FUN-FACTS-SHEET.pdf"} 
+                    "object": {"key": "documents/minhduongqo@gmail.com/bfbb0dac_FUN-FACTS-SHEET.pdf"} 
                 }
             }
         ]
