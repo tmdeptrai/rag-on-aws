@@ -6,6 +6,7 @@ import boto3
 import pymupdf
 from typing import List, Dict, Any
 from dotenv import load_dotenv
+from urllib.parse import unquote_plus
 
 # Clients
 from google import genai
@@ -18,12 +19,12 @@ load_dotenv()
 s3_client = boto3.client('s3')
 
 try:
-    genai_client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
-    pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
-    pc_index = pc.Index(os.environ["PINECONE_INDEX_NAME"])
+    genai_client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+    pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+    pc_index = pc.Index(os.getenv("PINECONE_INDEX_NAME"))
     neo4j_driver = GraphDatabase.driver(
-        os.environ["NEO4J_URI"],
-        auth=(os.environ["NEO4J_USERNAME"], os.environ["NEO4J_PASSWORD"])
+        os.getenv("NEO4J_URI"),
+        auth=(os.getenv("NEO4J_USERNAME"), os.getenv("NEO4J_PASSWORD"))
     )
 except Exception as e:
     print(f"⚠️ Init Warning: {e}")
@@ -165,10 +166,10 @@ def ingest_graph_global(full_text: str, metadata: Dict):
                 source=metadata['source_file']
             )
             
-        print(f"      ✅ Global Graph extraction complete. {len(triples)} edges created.")
+        print(f"      Global Graph extraction complete. {len(triples)} edges created.")
         
     except Exception as e:
-        print(f"      ❌ Graph extraction failed: {e}")
+        print(f"      Graph extraction failed: {e}")
 
 def update_status(bucket, key, status):
     try:
@@ -184,7 +185,8 @@ def update_status(bucket, key, status):
 def lambda_handler(event, context):
     for record in event['Records']:
         bucket = record['s3']['bucket']['name']
-        key = record['s3']['object']['key']
+        raw_key = record['s3']['object']['key']
+        key = unquote_plus(raw_key)
 
         print(f"Processing: {key}")
         update_status(bucket, key, "indexing")
@@ -234,7 +236,7 @@ if __name__ == "__main__":
     test_event = {
         "Records": [{
             "s3": {
-                "bucket": {"name": os.environ.get("S3_BUCKET_NAME")},
+                "bucket": {"name": os.getenv("S3_BUCKET_NAME")},
                 "object": {"key": "documents/minhduongqo@gmail.com/bfbb0dac_FUN-FACTS-SHEET.pdf"} 
             }
         }]
