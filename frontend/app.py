@@ -161,7 +161,7 @@ def confirm_forgot_view():
     if st.button("Back"): switch_view("login")
 
 def home_page():
-    st.sidebar.title("RAG Chatbot")
+    st.sidebar.title("Hybrid RAG Chatbot")
     st.sidebar.caption(f"User: {st.session_state.get('user_email')}")
     show_document_sidebar()
     
@@ -193,7 +193,7 @@ def home_page():
 
     # Chat Input
     if prompt := st.chat_input("Ask a question..."):
-        # 1. User Message
+        # 1. User Message (UI Only - Bot doesn't see this history)
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -201,13 +201,12 @@ def home_page():
         # 2. Bot Response
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
-            message_placeholder.markdown("🔍 *Searching Knowledge Graph & Vector DB...*")
+            message_placeholder.markdown("*Searching Knowledge Graph & Vector DB...*")
             
             # --- CALL THE API ---
             user_email = st.session_state.get('user_email', 'default_user')
             
-            # Pass the full session state messages so the bot has context
-            data = query_rag_bot(prompt, user_email, st.session_state.messages)
+            data = query_rag_bot(prompt, user_email)
             
             # --- HANDLE RESPONSE ---
             if "error" in data:
@@ -219,7 +218,7 @@ def home_page():
                 # A. Show the Answer
                 message_placeholder.markdown(answer)
                 
-                # B. Show the Sources (The "Magic" Part)
+                # B. Show the Sources
                 if references:
                     with st.expander(f"📚 Cited {len(references)} Sources (Vector + Graph)"):
                         for i, ref in enumerate(references):
@@ -233,10 +232,9 @@ def home_page():
                             st.code(ref['content'], language="text")
                             st.divider()
 
-                # C. Save to History
-                # We save the plain answer to history. 
-                # (Saving references to session_state is complex, so we skip it for now)
+                # C. Save to History (So the user sees the conversation flow)
                 st.session_state.messages.append({"role": "assistant", "content": answer})
+                
 # --- MAIN ROUTER ---
 # CASE A: We are in the middle of a logout
 if st.session_state.get('logout_pending'):
