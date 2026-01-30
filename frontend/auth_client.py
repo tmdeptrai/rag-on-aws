@@ -14,10 +14,10 @@ load_secrets_to_env()
 if 'cognito_client' not in st.session_state:
     st.session_state.cognito_client = boto3.client(
         'cognito-idp',
-        region_name=os.getenv("AWS_REGION")
+        region_name=st.secrets["AWS_REGION"]
     )
 
-CLIENT_ID = os.getenv("COGNITO_APP_CLIENT_ID")
+CLIENT_ID = st.secrets["COGNITO_APP_CLIENT_ID"]
 
 def register(email, password) -> list[bool, str]:
     try:

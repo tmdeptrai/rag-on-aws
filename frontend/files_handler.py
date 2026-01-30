@@ -17,13 +17,13 @@ load_secrets_to_env()
 if 's3_client' not in st.session_state:
     st.session_state.s3_client = boto3.client(
         's3',
-        region_name = os.getenv("AWS_REGION"),
-        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        region_name = st.secrets["AWS_REGION"],
+        aws_access_key_id=st.secrets["AWS_ACCESS_KEY_ID"],
+        aws_secret_access_key=st.secrets["AWS_SECRET_ACCESS_KEY"],
         config=Config(signature_version='s3v4')
     )
     
-BUCKET_NAME = os.getenv("S3_BUCKET_NAME")    
+BUCKET_NAME = st.secrets["S3_BUCKET_NAME"]    
 
 @st.cache_resource
 def init_db_connections():
@@ -31,13 +31,13 @@ def init_db_connections():
     Initializes and caches the bare-metal database clients.
     """
     # 1. Pinecone
-    pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-    pc_index = pc.Index(os.getenv("PINECONE_INDEX_NAME"))
+    pc = Pinecone(api_key=st.secrets["PINECONE_API_KEY"])
+    pc_index = pc.Index(st.secrets["PINECONE_INDEX_NAME"])
     
     # 2. Neo4j
     neo4j_driver = GraphDatabase.driver(
-        os.getenv("NEO4J_URI"),
-        auth=(os.getenv("NEO4J_USERNAME"), os.getenv("NEO4J_PASSWORD"))
+        st.secrets["NEO4J_URI"],
+        auth=(st.secrets["NEO4J_USERNAME"], st.secrets["NEO4J_PASSWORD"])
     )
     
     return pc_index, neo4j_driver
@@ -270,7 +270,7 @@ def show_document_sidebar():
 def check_user_has_files(user_email):
     """Checks if the user has at least one file in S3."""
     try:
-        bucket = os.getenv("S3_BUCKET_NAME")
+        bucket = st.secrets["S3_BUCKET_NAME"]
         prefix = f"documents/{user_email}/"
         
         # MaxKeys=1 makes this check super fast
