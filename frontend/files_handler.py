@@ -2,16 +2,12 @@ import boto3
 from botocore.config import Config
 import uuid
 import streamlit as st
-import os, sys
+import os, sys, time
+from pinecone import Pinecone
+from neo4j import GraphDatabase
 from dotenv import load_dotenv
 load_dotenv()
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(current_dir)
-if project_root not in sys.path:
-    sys.path.append(project_root)
-
-from utils.db_connect import get_vector_db, get_graph_db
 
 if 's3_client' not in st.session_state:
     st.session_state.s3_client = boto3.client(
@@ -24,17 +20,23 @@ if 's3_client' not in st.session_state:
     
 BUCKET_NAME = os.getenv("S3_BUCKET_NAME")    
 
-def get_cached_dbs():
+@st.cache_resource
+def init_db_connections():
     """
-    Returns (vector_db, graph_db).
-    Initializes them only if they aren't already in Session State.
+    Initializes and caches the bare-metal database clients.
     """
-    if 'vector_db' not in st.session_state:
-        with st.spinner("Connecting to Databases..."):
-            st.session_state.vector_db = get_vector_db()
-            st.session_state.graph_db = get_graph_db()
-            
-    return st.session_state.vector_db, st.session_state.graph_db
+    # 1. Pinecone
+    pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+    pc_index = pc.Index(os.getenv("PINECONE_INDEX_NAME"))
+    
+    # 2. Neo4j
+    neo4j_driver = GraphDatabase.driver(
+        os.getenv("NEO4J_URI"),
+        auth=(os.getenv("NEO4J_USERNAME"), os.getenv("NEO4J_PASSWORD"))
+    )
+    
+    return pc_index, neo4j_driver
+
 
 def upload_to_s3(file_obj):
     """
@@ -58,10 +60,10 @@ def upload_to_s3(file_obj):
             }
         )
         
-        return True, "File uploaded, waiting for indexer..."
+        return True, "File uploaded, waiting for indexer...", key
     
     except Exception as e:
-        return False, f"Upload failed: {str(e)}"
+        return False, f"Upload failed: {str(e)}", None
     
 def get_presigned_url(key):
     """Generates a temporary url to view the file"""
@@ -77,17 +79,21 @@ def get_presigned_url(key):
     except Exception as e:
         st.error(f"Error: {e}")
         return None
-
+    
 def delete_file(key):
-    """Deletes file from S3 -> Pinecone -> Neo4j"""
+    """Deletes file from S3 -> Pinecone -> Neo4j (Bare Metal)"""
     user_email = st.session_state.get('user_email')
     if not user_email:
         st.error("User email not found in session.")
         return False
     
-    vector_db, graph_db = get_cached_dbs()
-    success = True
+    # Get bare-metal clients
+    pc_index, neo4j_driver = init_db_connections()
+    
     status_msg = []
+    success = True
+    
+    # 1. S3 Delete
     try:
         st.session_state.s3_client.delete_object(
             Bucket=BUCKET_NAME,
@@ -98,29 +104,29 @@ def delete_file(key):
         st.error(f"S3 delete failed: {e}")
         return False    
     
-    #Delete from pinecone
+    # 2. Pinecone Delete (Direct API)
     try:
-        vector_db.index.delete(
-            filter={
-                "source": key,
-            },
+        # Pinecone's delete_by_filter logic
+        pc_index.delete(
+            filter={"source": key},
             namespace=user_email
         )
-        
         status_msg.append("Vectors deleted")
     except Exception as e:
         print(f"Vector delete warning: {e}")
         status_msg.append("Vector cleanup failed")
         success = False     
     
-    #Neo4j
+    # 3. Neo4j Delete (Direct Driver)
     try:
         query = """
             MATCH (d:Document) 
             WHERE d.source = $key 
             DETACH DELETE d
         """
-        graph_db.query(query,params={"key":key})
+        with neo4j_driver.session() as session:
+            session.run(query, key=key)
+            
         status_msg.append("Graph nodes deleted")
     except Exception as e:
         print(f"Graph delete warning: {e}")
@@ -133,8 +139,51 @@ def delete_file(key):
     else:
         st.warning("Partial delete: " + " | ".join(status_msg))
         
-    return True    
+    return True
             
+
+def poll_indexing_status(bucket_name, file_key, timeout=60, interval=5):
+    """
+    Polls S3 every 'interval' seconds to check if the status tag becomes 'ready'.
+    Stops after 'timeout' seconds.
+    """
+    start_time = time.time()
+    
+    status_container = st.empty()
+    progress_bar = status_container.progress(0, text="Waiting for indexer to start...")
+    
+    while (time.time() - start_time) < timeout:
+        try:
+            response = st.session_state.s3_client.get_object_tagging(
+                Bucket=bucket_name,
+                Key=file_key
+            )
+            
+            # Extract tags into a dict
+            tags = {t['Key']: t['Value'] for t in response.get('TagSet', [])}
+            status = tags.get('status', 'unknown')
+            
+            if status == 'ready':
+                progress_bar.progress(100, text="Indexing Complete!")
+                time.sleep(1)
+                status_container.empty()
+                return True
+            
+            elif status == 'failed':
+                status_container.error("❌ Indexing Failed in Lambda.")
+                return False
+            
+            elif status == 'indexing':
+                progress_bar.progress(50, text="AI is ingesting your document(s)...")
+            
+            # Wait before next check
+            time.sleep(interval)
+            
+        except Exception as e:
+            time.sleep(interval)
+            
+    status_container.error("Timeout: Indexing took too long.")
+    return False
 
 def show_document_sidebar():
     st.sidebar.header("Your Documents")
@@ -158,8 +207,6 @@ def show_document_sidebar():
 
     if st.sidebar.button("Refresh Status"):
         st.rerun()
-
-    st.sidebar.markdown("---")
     
     #Iterate files
     for obj in response['Contents']:
@@ -209,3 +256,18 @@ def show_document_sidebar():
                         # (Requires Lambda to listen to Tag changes, or just re-upload)
                         st.info("Re-upload to retry.")
     
+def check_user_has_files(user_email):
+    """Checks if the user has at least one file in S3."""
+    try:
+        bucket = os.getenv("S3_BUCKET_NAME")
+        prefix = f"documents/{user_email}/"
+        
+        # MaxKeys=1 makes this check super fast
+        response = st.session_state.s3_client.list_objects_v2(
+            Bucket=bucket, 
+            Prefix=prefix, 
+            MaxKeys=1
+        )
+        return 'Contents' in response
+    except Exception:
+        return False    
