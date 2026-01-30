@@ -4,6 +4,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import streamlit as st
+def load_secrets_to_env():
+    for key, value in st.secrets.items():
+        if key not in os.environ:
+            os.environ[key] = str(value)
+load_secrets_to_env()
+
 QUERY_LAMBDA_URL = os.getenv("QUERY_LAMBDA_URL")
 
 def query_rag_bot(question, user_email):

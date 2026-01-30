@@ -2,13 +2,21 @@ import os
 import time
 from dotenv import load_dotenv
 load_dotenv()
+
 import streamlit as st
 import boto3
 from botocore.exceptions import ClientError
 import extra_streamlit_components as stx
+import uuid
+
+def load_secrets_to_env():
+    for key, value in st.secrets.items():
+        if key not in os.environ:
+            os.environ[key] = str(value)
+load_secrets_to_env()
 
 import auth_client
-from files_handler import upload_to_s3, show_document_sidebar
+from files_handler import upload_to_s3, show_document_sidebar, poll_indexing_status, check_user_has_files
 from api import query_rag_bot
 st.set_page_config(page_title="RAG-on-aws", page_icon="🤖")
 
@@ -161,29 +169,45 @@ def confirm_forgot_view():
     if st.button("Back"): switch_view("login")
 
 def home_page():
+    user_email = st.session_state.get('user_email', 'default_user')
     st.sidebar.title("Hybrid RAG Chatbot")
-    st.sidebar.caption(f"User: {st.session_state.get('user_email')}")
+    st.sidebar.caption(f"User: {user_email}")
+    
+    if "file_uploader_key" not in st.session_state:
+        st.session_state["file_uploader_key"] = str(uuid.uuid4())
+        
     show_document_sidebar()
     
     # --- Sidebar: Upload ---
     st.sidebar.divider()
     st.sidebar.header("Upload Document")
-    uploaded_file = st.sidebar.file_uploader("Choose PDF", type="pdf")
+    uploaded_file = st.sidebar.file_uploader("Choose PDF", type="pdf",key=st.session_state["file_uploader_key"])
+    
     if uploaded_file and st.sidebar.button("Upload"):
-        with st.spinner("Uploading..."):
-            success, msg = upload_to_s3(uploaded_file)
+        with st.spinner("Uploading to S3, Pinecone and Neo4j..."):
+            success, msg, file_key = upload_to_s3(uploaded_file)
+            
             if success:
-                st.sidebar.success(msg)
+                st.sidebar.success("Upload success! Waiting for ingestion...")
+                
+                # Trigger Polling
+                
+                is_indexed = poll_indexing_status(os.getenv("S3_BUCKET_NAME"), file_key)
+                
+                if is_indexed:
+                    st.sidebar.success("Ready to Chat!")
+                    time.sleep(1.5)
+                    st.session_state["file_uploader_key"] = str(uuid.uuid4())
+                    st.rerun() # Refresh app to show new file in list (if you have one)
             else:
                 st.sidebar.error(msg)
-            pass
     
     st.sidebar.divider()
     if st.sidebar.button("Logout"):
         logout()
 
     # --- Main Chat UI ---
-    st.title("📚 Document Assistant")
+    st.title("Document Assistant")
 
     # Display Chat History
     for message in st.session_state.messages:
@@ -191,49 +215,61 @@ def home_page():
             st.markdown(message["content"])
             # Optional: If you saved references in history, you could show them here too
 
+
+    has_files = check_user_has_files(user_email)
+    if not has_files:
+        st.info(" **Please upload a PDF document in the sidebar to start chatting!**")
+        st.chat_input("Upload a document before asking question", disabled=True)
+    else:
     # Chat Input
-    if prompt := st.chat_input("Ask a question..."):
-        # 1. User Message (UI Only - Bot doesn't see this history)
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
+        if prompt := st.chat_input("Ask a question..."):
+            # 1. User Message (UI Only - Bot doesn't see this history)
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
 
-        # 2. Bot Response
-        with st.chat_message("assistant"):
-            message_placeholder = st.empty()
-            message_placeholder.markdown("*Searching Knowledge Graph & Vector DB...*")
-            
-            # --- CALL THE API ---
-            user_email = st.session_state.get('user_email', 'default_user')
-            
-            data = query_rag_bot(prompt, user_email)
-            
-            # --- HANDLE RESPONSE ---
-            if "error" in data:
-                message_placeholder.error(data["error"])
-            else:
-                answer = data.get("answer", "No answer found.")
-                references = data.get("references", [])
+            # 2. Bot Response
+            with st.chat_message("assistant"):
+                message_placeholder = st.empty()
+                message_placeholder.markdown("*Searching Knowledge Graph & Vector DB...*")
                 
-                # A. Show the Answer
-                message_placeholder.markdown(answer)
+                # --- CALL THE API ---
+                user_email = st.session_state.get('user_email', 'default_user')
                 
-                # B. Show the Sources
-                if references:
-                    with st.expander(f"📚 Cited {len(references)} Sources (Vector + Graph)"):
-                        for i, ref in enumerate(references):
-                            # Icons for visual flair
-                            icon = "🕸️" if ref['type'] == 'graph' else "📄"
-                            score_val = float(ref.get('score', 0))
-                            color = "green" if score_val > 0.8 else "orange"
-                            
-                            st.markdown(f"**{i+1}. {icon} {ref['type'].title()}** <span style='color:{color}'>({score_val:.2f})</span>", unsafe_allow_html=True)
-                            st.caption(f"Source: *{ref['source']}*")
-                            st.code(ref['content'], language="text")
-                            st.divider()
+                data = query_rag_bot(prompt, user_email)
+                
+                # --- HANDLE RESPONSE ---
+                if "error" in data:
+                    message_placeholder.error(data["error"])
+                else:
+                    answer = data.get("answer", "No answer found.")
+                    references = data.get("references", [])
+                    
+                    # A. Show the Answer
+                    message_placeholder.markdown(answer)
+                    
+                    # B. Show the Sources
+                    if references:
+                        with st.expander(f"📚 Cited {len(references)} Sources (Vector + Graph)"):
+                            for i, ref in enumerate(references):
+                                # Icons for visual flair
+                                icon = "🕸️" if ref['type'] == 'graph' else "📄"
+                                score_val = float(ref.get('score', 0))
+                                color = "green" if score_val > 0.8 else "orange"
+                                
+                                st.markdown(f"**{i+1}. {icon} {ref['type'].title()}** <span style='color:{color}'>({score_val:.2f})</span>", unsafe_allow_html=True)
+                                st.caption(f"Source: *{ref['source']}*")
+                                st.text_area(
+                                    label=f"Context_{i}",         
+                                    value=ref['content'],         
+                                    height= 50 if ref['type']=='graph' else 300,                    
+                                    disabled=True,                
+                                    label_visibility="collapsed"
+                                )
+                                st.divider()
 
-                # C. Save to History (So the user sees the conversation flow)
-                st.session_state.messages.append({"role": "assistant", "content": answer})
+                    # C. Save to History (So the user sees the conversation flow)
+                    st.session_state.messages.append({"role": "assistant", "content": answer})
                 
 # --- MAIN ROUTER ---
 # CASE A: We are in the middle of a logout

@@ -90,20 +90,17 @@ def ingest_vectors(chunks: List[str], metadata: Dict, namespace: str):
 
 def ingest_graph_global(full_text: str, metadata: Dict):
     """
-    Extracts graph from the WHOLE text at once.
-    Pros: Better context understanding (Co-reference resolution).
-    Cons: Limited by token window (approx 30k words for cheap models).
+    Extracts graph from the WHOLE text.
+    NOW SUPPORTS DYNAMIC RELATIONSHIP TYPES (e.g. [:INVENTED], [:LOCATED_AT]).
     """
     print("   -> Extracting Global Graph Data...")
     
-    # 1. Safety Check: If text is too huge, truncate or warn
-    # (Gemini Flash has a huge window, so this is usually fine for <100 pages)
     if len(full_text) > 100000:
-        print("      ⚠️ Text > 100k chars. Truncating for graph extraction safety.")
         graph_text = full_text[:100000]
     else:
         graph_text = full_text
 
+    # Strict Schema to force LLM to give us good data
     graph_schema = {
         "type": "OBJECT",
         "properties": {
@@ -124,10 +121,10 @@ def ingest_graph_global(full_text: str, metadata: Dict):
     }
 
     try:
-        # 2. Single LLM Call
+        # 1. LLM Call
         response = genai_client.models.generate_content(
             model="gemini-2.0-flash",
-            contents=f"Extract all knowledge triples. Focus on entities and how they connect. Text: {graph_text}",
+            contents=f"Extract knowledge triples. Use precise, active verbs for relationships (e.g., 'INVENTED', 'LOCATED_IN', 'AUTHORED'). Avoid generic verbs. Text: {graph_text}",
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=graph_schema,
@@ -142,31 +139,48 @@ def ingest_graph_global(full_text: str, metadata: Dict):
             print("      ⚠️ No triples found.")
             return
 
-        # 3. Clean Relationships
-        for t in triples:
-            t['relationship'] = t['relationship'].upper().replace(" ", "_")
-
-        # 4. Batch Ingest
-        cypher_query = """
-            UNWIND $triples AS t
-            MERGE (h:Entity {id: t.head}) 
-            ON CREATE SET h.user_email = $email, h.source = $source
-            
-            MERGE (tail:Entity {id: t.tail})
-            ON CREATE SET tail.user_email = $email, tail.source = $source
-            
-            MERGE (h)-[r:RELATED_TO {original_type: toUpper(t.relationship)}]->(tail)
-        """
+        # 2. Group Triples by Relationship Type
+        # (Cypher can't parameterize edge types, so we must batch them by type)
+        triples_by_type = {}
         
-        with neo4j_driver.session() as session:
-            session.run(
-                cypher_query, 
-                triples=triples, 
-                email=metadata['user_email'], 
-                source=metadata['source_file']
-            )
+        for t in triples:
+            # Sanitize verb: "Located In" -> "LOCATED_IN"
+            # We filter out non-alphanumeric chars to prevent Cypher injection
+            raw_rel = t['relationship'].upper().replace(" ", "_")
+            rel_type = "".join(c for c in raw_rel if c.isalnum() or c == "_")
             
-        print(f"      Global Graph extraction complete. {len(triples)} edges created.")
+            if not rel_type: continue
+            
+            if rel_type not in triples_by_type:
+                triples_by_type[rel_type] = []
+            triples_by_type[rel_type].append(t)
+
+        # 3. Execute Batch for Each Type
+        with neo4j_driver.session() as session:
+            total_edges = 0
+            
+            for rel_type, batch in triples_by_type.items():
+                # We dynamically inject the SANITIZED rel_type into the query string
+                cypher_query = f"""
+                    UNWIND $triples AS t
+                    MERGE (h:Entity {{id: t.head}}) 
+                    ON CREATE SET h.user_email = $email, h.source = $source
+                    
+                    MERGE (tail:Entity {{id: t.tail}}) 
+                    ON CREATE SET tail.user_email = $email, tail.source = $source
+                    
+                    MERGE (h)-[r:{rel_type}]->(tail)
+                """
+                
+                session.run(
+                    cypher_query, 
+                    triples=batch, 
+                    email=metadata['user_email'], 
+                    source=metadata['source_file']
+                )
+                total_edges += len(batch)
+            
+        print(f"      Global Graph extraction complete. {total_edges} edges created across {len(triples_by_type)} relationship types.")
         
     except Exception as e:
         print(f"      Graph extraction failed: {e}")

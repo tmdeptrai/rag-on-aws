@@ -1,0 +1,7 @@
+pinecone
+neo4j
+boto3
+streamlit
+extra-streamlit-components
+requests
+python-dotenv

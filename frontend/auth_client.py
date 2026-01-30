@@ -5,6 +5,12 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
+def load_secrets_to_env():
+    for key, value in st.secrets.items():
+        if key not in os.environ:
+            os.environ[key] = str(value)
+load_secrets_to_env()
+
 if 'cognito_client' not in st.session_state:
     st.session_state.cognito_client = boto3.client(
         'cognito-idp',
