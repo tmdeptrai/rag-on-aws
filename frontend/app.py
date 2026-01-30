@@ -2,11 +2,18 @@ import os
 import time
 from dotenv import load_dotenv
 load_dotenv()
+
 import streamlit as st
 import boto3
 from botocore.exceptions import ClientError
 import extra_streamlit_components as stx
 import uuid
+
+def load_secrets_to_env():
+    for key, value in st.secrets.items():
+        if key not in os.environ:
+            os.environ[key] = str(value)
+load_secrets_to_env()
 
 import auth_client
 from files_handler import upload_to_s3, show_document_sidebar, poll_indexing_status, check_user_has_files

@@ -8,6 +8,11 @@ from neo4j import GraphDatabase
 from dotenv import load_dotenv
 load_dotenv()
 
+def load_secrets_to_env():
+    for key, value in st.secrets.items():
+        if key not in os.environ:
+            os.environ[key] = str(value)
+load_secrets_to_env()
 
 if 's3_client' not in st.session_state:
     st.session_state.s3_client = boto3.client(
@@ -85,6 +90,12 @@ def delete_file(key):
     user_email = st.session_state.get('user_email')
     if not user_email:
         st.error("User email not found in session.")
+        return False
+    
+    expected_prefix = f"documents/{user_email}/"
+    
+    if not key.startswith(expected_prefix):
+        st.error(f"Authorization Error: You do not own this file.\nTarget: {key}\nYou: {user_email}")
         return False
     
     # Get bare-metal clients
