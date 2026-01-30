@@ -1,7 +1,5 @@
 import os
 import time
-from dotenv import load_dotenv
-load_dotenv()
 
 import streamlit as st
 import boto3
@@ -9,11 +7,6 @@ from botocore.exceptions import ClientError
 import extra_streamlit_components as stx
 import uuid
 
-def load_secrets_to_env():
-    for key, value in st.secrets.items():
-        if key not in os.environ:
-            os.environ[key] = str(value)
-load_secrets_to_env()
 
 import auth_client
 from files_handler import upload_to_s3, show_document_sidebar, poll_indexing_status, check_user_has_files
@@ -23,18 +16,18 @@ st.set_page_config(page_title="RAG-on-aws", page_icon="🤖")
 if 'cognito_client' not in st.session_state:
     st.session_state.cognito_client = boto3.client(
         'cognito-idp',
-        region_name=os.getenv("AWS_REGION")
+        region_name=st.secrets["AWS_REGION"]
     )
 
 if 's3_client' not in st.session_state:
     st.session_state.s3_client = boto3.client(
         's3',
-        region_name = os.getenv("AWS_REGION"),
-        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY")
+        region_name = st.secrets["AWS_REGION"],
+        aws_access_key_id=st.secrets["AWS_ACCESS_KEY_ID"],
+        aws_secret_access_key=st.secrets["AWS_SECRET_ACCESS_KEY"]
     )
 
-BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
+BUCKET_NAME = st.secrets["S3_BUCKET_NAME"]
 
 # --- SESSION STATE SETUP ---
 if "token" not in st.session_state:
@@ -192,7 +185,7 @@ def home_page():
                 
                 # Trigger Polling
                 
-                is_indexed = poll_indexing_status(os.getenv("S3_BUCKET_NAME"), file_key)
+                is_indexed = poll_indexing_status(st.secrets["S3_BUCKET_NAME"], file_key)
                 
                 if is_indexed:
                     st.sidebar.success("Ready to Chat!")
