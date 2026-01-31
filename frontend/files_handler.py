@@ -153,7 +153,7 @@ def delete_file(key):
     return True
             
 
-def poll_indexing_status(bucket_name, file_key, timeout=60, interval=5):
+def poll_indexing_status(bucket_name, file_key, timeout=90, interval=5):
     """
     Polls S3 every 'interval' seconds to check if the status tag becomes 'ready'.
     Stops after 'timeout' seconds.
