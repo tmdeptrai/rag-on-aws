@@ -9,14 +9,14 @@ RUN apt-get update && apt-get install -y \
     unzip \
     libcurl4-openssl-dev
 
-COPY backend/query/query-requirements.txt .
+COPY backend/query/query_requirements.txt .
 
 # Install dependencies + RIC
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir \
     --target /install \
     awslambdaric \
-    -r query-requirements.txt
+    -r query_requirements.txt
 
 # STAGE 2: Final Runtime
 FROM python:3.11-slim

@@ -298,7 +298,7 @@ if __name__ == "__main__":
         "Records": [{
             "s3": {
                 "bucket": {"name": os.getenv("S3_BUCKET_NAME")},
-                "object": {"key": "documents/trungdao131105@gmail.com/b3cbe5bc_agentic_rag_paper.pdf"} 
+                "object": {"key": "documents/kimoanh16092005@gmail.com/e91f971c_data_analyst_learning_roadmap.pdf"} 
             }
         }]
     }
