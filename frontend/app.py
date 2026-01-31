@@ -10,7 +10,7 @@ import uuid
 
 import auth_client
 from files_handler import upload_to_s3, show_document_sidebar, poll_indexing_status, check_user_has_files
-from api import query_rag_bot
+from chat_api import query_rag_bot
 st.set_page_config(page_title="RAG-on-aws", page_icon="🤖")
 
 if 'cognito_client' not in st.session_state:
