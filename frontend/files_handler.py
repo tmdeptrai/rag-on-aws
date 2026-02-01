@@ -5,14 +5,6 @@ import streamlit as st
 import os, sys, time
 from pinecone import Pinecone
 from neo4j import GraphDatabase
-from dotenv import load_dotenv
-load_dotenv()
-
-def load_secrets_to_env():
-    for key, value in st.secrets.items():
-        if key not in os.environ:
-            os.environ[key] = str(value)
-load_secrets_to_env()
 
 if 's3_client' not in st.session_state:
     st.session_state.s3_client = boto3.client(
