@@ -3,4 +3,4 @@ pytest-html
 deepeval
 python-dotenv
 requests
-google-generativeai
+google-genai
