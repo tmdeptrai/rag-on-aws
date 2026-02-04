@@ -1,8 +1,12 @@
 name: Deploy Backend & Promote to Prod
 
 on:
-  push:
-    branches: [ "main" ]
+  workflow_run:
+    workflows: ["RAG Evaluation Pipeline"]
+    types:
+      - completed
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -10,12 +14,14 @@ permissions:
   contents: read 
 
 jobs:
-  test:
-    uses: ./.github/workflows/rag-eval.yml
-    secrets: inherit
+  check-tests:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - run: echo "Tests passed! Proceeding to deploy."
 
   deploy-backend:
-    needs: test
+    needs: check-tests
     runs-on: ubuntu-latest
     
     steps:
