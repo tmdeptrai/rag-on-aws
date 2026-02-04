@@ -24,7 +24,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ secrets.REGION_NAME }}
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -35,10 +35,12 @@ jobs:
 
       - name: 🚀 Run Deploy Script
         env:
-          AWS_REGION: ${{ secrets.AWS_REGION }} 
+          REGION_NAME: ${{ secrets.REGION_NAME }} 
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
           ECR_REPO_INGEST: ${{ secrets.ECR_REPO_INGEST }}
+          ECR_REPO_QUERY: ${{ secrets.ECR_REPO_QUERY }}
           LAMBDA_FUNC_INGEST: ${{ secrets.LAMBDA_FUNC_INGEST }}
+          LAMBDA_FUNC_QUERY: ${{ secrets.LAMBDA_FUNC_QUERY }}
         run: ./scripts/deploy_all.sh
 
   # PROMOTE TO PROD (Trigger Streamlit Cloud)
