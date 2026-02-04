@@ -1,5 +1,6 @@
 pytest
 pytest-html
-deepeval>=1.0.0
+deepeval
 python-dotenv
 requests
+google-generativeai
