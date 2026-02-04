@@ -3,16 +3,15 @@ name: Deploy Backend & Promote to Prod
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch: # Allows manual trigger
+  workflow_dispatch:
 
 jobs:
   test:
     uses: ./.github/workflows/rag-eval.yml
     secrets: inherit
 
-  # DEPLOY BACKEND TO AWS
   deploy-backend:
-    needs: test # Only deploy if tests pass
+    needs: test
     runs-on: ubuntu-latest
     
     steps:
@@ -24,7 +23,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.REGION_NAME }}
+          aws-region: ${{ secrets.REGION_NAME }} # Required for the step itself
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -33,9 +32,11 @@ jobs:
       - name: Make Script Executable
         run: chmod +x ./scripts/deploy_all.sh
 
-      - name: 🚀 Run Deploy Script
+      - name: Run Deploy Script
         env:
           REGION_NAME: ${{ secrets.REGION_NAME }} 
+          AWS_REGION: ${{ secrets.REGION_NAME }} 
+          
           AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
           ECR_REPO_INGEST: ${{ secrets.ECR_REPO_INGEST }}
           ECR_REPO_QUERY: ${{ secrets.ECR_REPO_QUERY }}
@@ -48,7 +49,7 @@ jobs:
     needs: deploy-backend
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Needed to push to branch
+      contents: write
       
     steps:
       - name: Checkout Main
