@@ -1,0 +1,67 @@
+name: Deploy Backend & Promote to Prod
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: # Allows manual trigger
+
+jobs:
+  test:
+    uses: ./.github/workflows/rag-eval.yml
+    secrets: inherit
+
+  # DEPLOY BACKEND TO AWS
+  deploy-backend:
+    needs: test # Only deploy if tests pass
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Make Script Executable
+        run: chmod +x ./scripts/deploy_all.sh
+
+      - name: 🚀 Run Deploy Script
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }} 
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          ECR_REPO_INGEST: ${{ secrets.ECR_REPO_INGEST }}
+          LAMBDA_FUNC_INGEST: ${{ secrets.LAMBDA_FUNC_INGEST }}
+        run: ./scripts/deploy_all.sh
+
+  # PROMOTE TO PROD (Trigger Streamlit Cloud)
+  promote-frontend:
+    needs: deploy-backend
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Needed to push to branch
+      
+    steps:
+      - name: Checkout Main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🔀 Sync Main to Prod
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          
+          # Force push 'main' content to 'prod' branch
+          git checkout -B prod
+          git push origin prod --force
+          
+      - name: ✅ Status
+        run: echo "Code pushed to 'prod'. Streamlit Cloud should auto-update now."

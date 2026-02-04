@@ -1,0 +1,5 @@
+pytest
+pytest-html
+deepeval>=1.0.0
+python-dotenv
+requests
