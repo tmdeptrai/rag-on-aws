@@ -1,0 +1,17 @@
+[
+  {
+    "input": "What are the four key patterns that underpin agentic workflows?",
+    "expected_output": "The four key patterns are Reflection, Planning, Tool Use, and Multi-Agent Collaboration.",
+    "context": []
+  },
+  {
+    "input": "How does Agentic RAG differ from traditional RAG systems regarding workflow structure?",
+    "expected_output": "Traditional RAG systems are constrained by static, linear workflows, whereas Agentic RAG employs autonomous agents to orchestrate dynamic workflows, capable of iterative refinement and multi-step reasoning.",
+    "context": []
+  },
+  {
+    "input": "Describe the 'Routing' workflow pattern.",
+    "expected_output": "Routing involves classifying an input query and directing it to the most appropriate specialized process, model, or agent to ensure optimized performance for that specific category.",
+    "context": []
+  }
+]

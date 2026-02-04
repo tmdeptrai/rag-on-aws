@@ -1,0 +1,102 @@
+[
+  {
+    "input": "What are the four key patterns that underpin agentic workflows?",
+    "expected_output": "The four key patterns are Reflection, Planning, Tool Use, and Multi-Agent Collaboration.",
+    "context": []
+  },
+  {
+    "input": "How does Agentic RAG differ from traditional RAG systems regarding workflow structure?",
+    "expected_output": "Traditional RAG systems are constrained by static, linear workflows, whereas Agentic RAG employs autonomous agents to orchestrate dynamic workflows, capable of iterative refinement and multi-step reasoning.",
+    "context": []
+  },
+  {
+    "input": "What is the primary function of the 'Reflection' pattern in agentic systems?",
+    "expected_output": "Reflection enables agents to iteratively evaluate and refine their own outputs by critiquing them for correctness, style, and efficiency, and then incorporating this feedback into subsequent iterations.",
+    "context": []
+  },
+  {
+    "input": "Describe the 'Routing' workflow pattern.",
+    "expected_output": "Routing involves classifying an input query and directing it to the most appropriate specialized process, model, or agent to ensure optimized performance for that specific category.",
+    "context": []
+  },
+  {
+    "input": "What is the key innovation of 'Modular RAG' compared to earlier paradigms?",
+    "expected_output": "Modular RAG decomposes the retrieval and generation pipeline into independent, reusable components (modules) that can be replaced or reconfigured, allowing for hybrid retrieval strategies and tool integration.",
+    "context": []
+  },
+  {
+    "input": "In the context of 'Corrective RAG' (CRAG), what happens if a retrieved document is evaluated as irrelevant?",
+    "expected_output": "If a document is evaluated as irrelevant, the system triggers corrective actions, such as rewriting the query (Query Refinement) or performing a web search (External Knowledge Retrieval) to find better information.",
+    "context": []
+  },
+  {
+    "input": "How does 'Adaptive RAG' determine which retrieval strategy to use?",
+    "expected_output": "Adaptive RAG uses a classifier to assess the complexity of a user's query. Based on this assessment, it routes the query to a no-retrieval path (for facts), a single-step retrieval (for simple questions), or multi-step retrieval (for complex reasoning).",
+    "context": []
+  },
+  {
+    "input": "What are the two types of 'Parallelization' strategies mentioned in agentic workflows?",
+    "expected_output": "The two strategies are 'Sectioning', where a task is divided into independent subtasks run simultaneously, and 'Voting', where multiple models generate outputs for the same task to improve accuracy.",
+    "context": []
+  },
+  {
+    "input": "What is the 'Orchestrator-Workers' pattern?",
+    "expected_output": "This pattern features a central orchestrator model that dynamically breaks a complex task into subtasks and assigns them to specialized worker models, then synthesizes their results.",
+    "context": []
+  },
+  {
+    "input": "What are the main components of the 'Agent-G' framework?",
+    "expected_output": "Agent-G consists of a Retriever Bank (specialized agents for graph vs. text), a Critic Module (for validation), Dynamic Agent Interaction, and LLM Integration for synthesis.",
+    "context": []
+  },
+  {
+    "input": "Explain the 'Graph Expansion' innovation in the GeAR framework.",
+    "expected_output": "Graph Expansion enhances the base retrieval process by including connected entities and relationships from a knowledge graph, allowing the system to capture dependencies that simple text retrieval might miss.",
+    "context": []
+  },
+  {
+    "input": "What is the specific focus of 'Agentic Document Workflows' (ADW)?",
+    "expected_output": "ADW focuses on end-to-end knowledge work automation for document-centric processes, such as invoice processing or contract review, by maintaining state and coordinating multi-step actions.",
+    "context": []
+  },
+  {
+    "input": "What are three key challenges facing Agentic RAG systems?",
+    "expected_output": "The three key challenges are Coordination Complexity (managing inter-agent communication), Computational Overhead (due to multiple agents and iterations), and Scalability Limitations.",
+    "context": []
+  },
+  {
+    "input": "How does the 'Evaluator-Optimizer' workflow pattern improve response quality?",
+    "expected_output": "It generates an initial response and then uses an evaluation model to provide feedback. The generator uses this feedback to refine the response in a loop until it meets acceptance criteria.",
+    "context": []
+  },
+  {
+    "input": "What role does 'Memory' play in an AI Agent's architecture?",
+    "expected_output": "Memory (both short-term and long-term) allows the agent to track the immediate conversation state and store accumulated knowledge or experiences across interactions.",
+    "context": []
+  },
+  {
+    "input": "Provide an example use case for a 'Hierarchical Agentic RAG' system.",
+    "expected_output": "A financial analysis system where a Top-Tier Agent assesses query complexity, delegates tasks to mid-level agents (for database retrieval) and lower-level agents (for web search), and then aggregates the results.",
+    "context": []
+  },
+  {
+    "input": "What is 'Prompt Chaining' best suited for?",
+    "expected_output": "Prompt Chaining is best suited for tasks that can be decomposed into a fixed sequence of subtasks where each step builds logically upon the previous one.",
+    "context": []
+  },
+  {
+    "input": "What distinguishes 'Graph RAG' from 'Advanced RAG'?",
+    "expected_output": "Graph RAG explicitly integrates graph-based data structures to perform multi-hop reasoning over relationships between nodes, whereas Advanced RAG typically focuses on optimizing dense vector search and re-ranking.",
+    "context": []
+  },
+  {
+    "input": "Which specific framework mentioned supports 'Agentic Document Workflows' (ADW)?",
+    "expected_output": "LlamaIndex is the framework mentioned that supports Agentic Document Workflows (ADW).",
+    "context": []
+  },
+  {
+    "input": "In the context of Multi-Agent RAG, what is the benefit of 'Task Specialization'?",
+    "expected_output": "Task Specialization allows different agents to be optimized for specific data sources (e.g., SQL vs. Web vs. Vector DB), improving the overall accuracy and relevance of the retrieval process.",
+    "context": []
+  }
+]
