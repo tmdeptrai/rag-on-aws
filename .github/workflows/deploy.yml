@@ -3,10 +3,8 @@ name: Deploy Backend & Promote to Prod
 on:
   workflow_run:
     workflows: ["RAG Evaluation Pipeline"]
-    types:
-      - completed
-    branches:
-      - main
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -20,9 +18,12 @@ jobs:
     steps:
       - run: echo "Tests passed! Proceeding to deploy."
 
-  deploy-backend:
+  deploy-infra:
     needs: check-tests
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./infrastructure
     
     steps:
       - name: Checkout Code
@@ -33,30 +34,51 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.REGION_NAME }} # Required for the step itself
+          aws-region: ${{ secrets.REGION_NAME }}
 
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Make Script Executable
-        run: chmod +x ./scripts/deploy_all.sh
-
-      - name: Run Deploy Script
+      # 1. BUILD & PUSH DOCKER IMAGES (With Git SHA Tag)
+      - name: Build and Push Docker Images
         env:
-          REGION_NAME: ${{ secrets.REGION_NAME }} 
-          AWS_REGION: ${{ secrets.REGION_NAME }} 
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          INGEST_REPO: ${{ secrets.ECR_REPO_INGEST }} 
+          QUERY_REPO: ${{ secrets.ECR_REPO_QUERY }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          # Build & Push Ingest
+          docker build -t $ECR_REGISTRY/$INGEST_REPO:$IMAGE_TAG -f ../backend/ingest/Dockerfile ..
+          docker push $ECR_REGISTRY/$INGEST_REPO:$IMAGE_TAG
           
-          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-          ECR_REPO_INGEST: ${{ secrets.ECR_REPO_INGEST }}
-          ECR_REPO_QUERY: ${{ secrets.ECR_REPO_QUERY }}
-          LAMBDA_FUNC_INGEST: ${{ secrets.LAMBDA_FUNC_INGEST }}
-          LAMBDA_FUNC_QUERY: ${{ secrets.LAMBDA_FUNC_QUERY }}
-        run: ./scripts/deploy_all.sh
+          # Build & Push Query
+          docker build -t $ECR_REGISTRY/$QUERY_REPO:$IMAGE_TAG -f ../backend/query/Dockerfile ..
+          docker push $ECR_REGISTRY/$QUERY_REPO:$IMAGE_TAG
 
-  # PROMOTE TO PROD (Trigger Streamlit Cloud)
+      # SETUP TERRAFORM
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      # TERRAFORM INIT (Connects to S3 Backend)
+      - name: Terraform Init
+        run: terraform init
+
+      # TERRAFORM APPLY (Updates Lambda to use the new Docker Image)
+      - name: Terraform Apply
+        env:
+          # Pass secrets as TF vars
+          TF_VAR_google_api_key: ${{ secrets.GOOGLE_API_KEY }}
+          TF_VAR_pinecone_api_key: ${{ secrets.PINECONE_API_KEY }}
+          TF_VAR_pinecone_index_name: ${{ secrets.PINECONE_INDEX_NAME }}
+          TF_VAR_neo4j_uri: ${{ secrets.NEO4J_URI }}
+          TF_VAR_neo4j_username: ${{ secrets.NEO4J_USERNAME }}
+          TF_VAR_neo4j_password: ${{ secrets.NEO4J_PASSWORD }}
+          TF_VAR_image_tag: ${{ github.sha }}
+        run: terraform apply -auto-approve
+
   promote-frontend:
-    needs: deploy-backend
+    needs: deploy-infra
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -71,10 +93,5 @@ jobs:
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          
-          # Force push 'main' content to 'prod' branch
           git checkout -B prod
           git push origin prod --force
-          
-      - name: Status
-        run: echo "Code pushed to 'prod'. Streamlit Cloud should auto-update now."
