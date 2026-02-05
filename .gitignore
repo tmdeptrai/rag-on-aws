@@ -1,5 +1,11 @@
 frontend/.streamlit/secrets.toml
 baguettebudget-f207a13dd55e.json
+*.plan
+*.tfstate.backup
+*.tfstate
+*.tfstate.*
+infrastructure/terraform.tfvars
+infrastructure/.terraform
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
