@@ -72,7 +72,7 @@ class GeminiDeepEvalLLM(DeepEvalBaseLLM):
 
 gemini_judge = GeminiDeepEvalLLM()
 
-def run_rag_locally(question, user_email="test@example.com"):
+def run_rag_locally(question, user_email="minhduongqo@gmail.com"):
     mock_event = {
         "body": json.dumps({
             "query": question, 
