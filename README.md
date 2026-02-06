@@ -1,6 +1,8 @@
 # RAG-on-AWS
 
-Fully End-to-End serverless hybrid Retrieval-Augmented Generation (RAG) application designed to run on AWS. The system ingests PDF documents into two knowledge stores (a vector database (Pinecone) for dense retrieval and a knowledge graph (Neo4j) for structured facts), then serves a Streamlit frontend that queries both and synthesizes answers using Google GenAI (Gemini), served by Amazon Lambda functions.
+Fully End-to-End serverless hybrid Retrieval-Augmented Generation (RAG) application designed to run on AWS, provisioned via IaC (Terraform). The system ingests PDF documents into two knowledge stores (a vector database (Pinecone) for dense retrieval and a knowledge graph (Neo4j) for structured facts), then synthesizes answers using Google GenAI (Gemini) via Amazon Lambda. 
+
+To ensure reliability, the pipeline features an automated 'LLM-as-a-Judge' evaluation suite (DeepEval) integrated into a CI/CD workflow, verifying answer faithfulness and relevancy before every deployment."
 
 ![](./figures/architecture.svg)
 
@@ -10,8 +12,11 @@ Fully End-to-End serverless hybrid Retrieval-Augmented Generation (RAG) applicat
     ![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?logo=streamlit&logoColor=white)
 
 * **Backend:** 
-    ![ECR][ECR-logo]
     ![AWS Lambda][Lambda-logo]
+    ![ECR][ECR-logo]
+    ![Docker](https://img.shields.io/badge/Docker-FFFFFF?logo=Docker&logoColor=2B99EE)
+
+
 * **Authentication:** ![Amazon Cognito](https://img.shields.io/badge/Cognito-User%20Pool-27272A?logo=auth0&logoColor=EB5424)
 
 * **File Storage**: ![Amazon S3][S3-logo]
@@ -27,12 +32,24 @@ Fully End-to-End serverless hybrid Retrieval-Augmented Generation (RAG) applicat
     ![Git](https://img.shields.io/badge/git-%23F05033.svg?logo=git&logoColor=white)
     ![GitHub](https://img.shields.io/badge/github-%23121011.svg?logo=github&logoColor=white)
 
+* **Infrastructure & CI/CD:**
+    ![Terraform](https://img.shields.io/badge/Terraform-7B42BC?logo=terraform&logoColor=white)
+    ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?logo=github-actions&logoColor=white)
+
+## Demo
+
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://tmdeptrai-rag-on-aws.streamlit.app/)
+
+![App Demo](./figures/demo-rag-on-aws.gif)
+
 ## Table of contents
 - [Project Overview](#project-overview)
 - [How it works: Implementation details](#how-it-works-implementation-details)
+- [RAG Evaluation & Testing](#evaluation--testing)
 - [Quickstart: Local development](#quickstart-local-development)
 - [Run backend components locally (ingest & query)](#run-backend-components-locally)
 - [Docker: Build the Lambda-compatible artifacts](#docker-build-the-lambda-compatible-artifacts)
+- [Infrastructure as Code](#infrastructure-as-code-iac)
 - [Deploying to AWS](#deploying-to-aws)
 - [Configuration: Environment variables & Streamlit secrets](#configuration-environment-variables--streamlit-secrets)
 - [Troubleshooting & diagnostics](#troubleshooting--diagnostics)
@@ -78,12 +95,18 @@ RAGwithAWS/
 │   ├── chat_api.py                     # API call to query handler
 │   ├── files_handler.py                # S3 file upload/delete
 │   └── requirements.txt
-├── infrastructure/                     # IaaC (coming soon)
-│   └── main.tf                         
-├── scripts/                            # Automation scripts
+├── infrastructure/                     # Infrastructure as Code
+│   ├── modules/                        # Modules (backend, auth, etc.)
+│   ├── main.tf                         # Entry point
+│   ├── variables.tf                    # Configuration definitions
+│   └── outputs.tf                      # Output endpoints
+├── scripts/                            # Automation scripts (local)
 │   ├── deploy_all.sh
 │   ├── deploy_ingest.sh
 │   └── deploy_query.sh
+├── tests/                              # RAG Evaluation
+│   ├── test_rag.py                     # DeepEval test suite
+│   └── golden_dataset.json             # QA pairs for eval
 ├── .env.example 
 ├── .gitignore 
 ├── LICENSE
@@ -126,6 +149,21 @@ Frontend (Streamlit):
 - Query: The frontend calls an endpoint (QUERY_LAMBDA_URL) to get answer and references. The UI displays answer and the cited contexts.
 
 ---
+
+## RAG Evaluation & Testing
+
+Reliability is ensured through an automated "LLM-as-a-Judge" evaluation pipeline using **DeepEval**. Every code change triggers a regression test suite that validates the RAG pipeline against a "Golden Dataset" of Q&A pairs.
+
+**Metrics Tracked:**
+- **Faithfulness:** Does the answer come purely from the retrieved context?
+- **Answer Relevancy:** Does the answer actually address the user's prompt?
+- **Contextual Precision:** Are the retrieved chunks relevant to the query?
+
+**Run Tests Locally:**
+```bash
+# Run the full test suite and generate an HTML report
+pytest tests/test_rag.py --html=report.html
+```
 
 ## Quickstart: Local development
 
@@ -204,38 +242,43 @@ Note: These Dockerfiles are intended to create runtime packages for AWS Lambda. 
 
 ---
 
+## Infrastructure as Code (IaC)
+
+All AWS resources (Lambdas, S3, Cognito, IAM Roles, ECR) are defined in **Terraform**. This ensures zero configuration drift between development and production environments.
+
+**Reasons:**
+- **State Management:** Terraform state is stored securely in S3 to allow team collaboration.
+- **Modular Design:** Infrastructure is split into reusable modules (`modules/`).
+- **Zero-Downtime Updates:** Lambda functions are updated in-place without breaking service.
+
+**Deploying Manually (from local):**
+```bash
+cd infrastructure
+# Initialize Terraform and backend
+terraform init
+
+# Plan and Apply changes
+terraform plan -out=tf.plan
+terraform apply tf.plan
+```
+
+---
+
 ## Deploying to AWS
 
-The repository contains scripts in `scripts/` to help with deployment:
-- `scripts/deploy_all.sh` — runs deploy_query.sh and deploy_ingest.sh in sequence.
+### Option A: Automated CI/CD (Recommended)
+This repository uses a **GitHub Actions** pipeline that fully automates the release process:
 
-Typical steps to deploy:
+1. **Push to `main`**: Triggers the **RAG Evaluation Pipeline**.
+2. **Test**: Runs `pytest` with DeepEval. If accuracy metrics drop below the threshold (e.g., 0.7), the pipeline fails.
+3. **Deploy**: If tests pass, the **Deploy Workflow** triggers:
+   - Builds Docker images for `ingest` and `query` services.
+   - Pushes images to Amazon ECR with the specific Git SHA tag.
+   - Runs `terraform apply` to update the Lambda functions to use the new images.
+   - Syncs the Streamlit frontend code to the production branch.
 
-1. Ensure AWS CLI is configured and you have permissions to create/update Lambda, IAM roles, S3, and Cognito resources.
-
-2. Build and push container images (if using container-based Lambdas):
-   - Build images (see Docker commands above).
-   - Tag and push to ECR:
-     ```bash
-     aws ecr create-repository --repository-name rag-ingest || true
-     aws ecr create-repository --repository-name rag-query || true
-
-     # Example push flow:
-     docker tag rag-ingest:latest <ACCOUNT>.dkr.ecr.<region>.amazonaws.com/rag-ingest:latest
-     docker push <ACCOUNT>.dkr.ecr.<region>.amazonaws.com/rag-ingest:latest
-     ```
-
-3. Create or update Lambda functions to use the images or ZIP artifacts. Ensure the handler is set to `lambda_function.lambda_handler` if using the provided Dockerfiles (or awslambdaric with a ZIP package).
-
-4. Create S3 bucket to hold user documents, and configure an S3 event notification to trigger the ingest Lambda on object creation. The ingest lambda relies on S3 object tagging for status updates.
-
-5. Create a Cognito User Pool and App Client, then update frontend secrets with Cognito values so the Streamlit app can use Cognito for login.
-
-6. Deploy Neo4j (AuraDB or self-hosted) and Pinecone index before running ingest.
-
-7. Update Streamlit secrets with endpoints, e.g. `QUERY_LAMBDA_URL` (API Gateway or Lambda Function URL) to allow the frontend to call the query service.
-
-> Note: This repository does not include pre-built CloudFormation or Terraform templates; please provision resources manually or with your preferred IaC.
+### Option B: Manual Deployment
+See the [Infrastructure as Code](#infrastructure-as-code-iac) section above to deploy using Terraform locally.
 
 ---
 
