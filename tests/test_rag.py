@@ -28,7 +28,7 @@ from backend.query.query import lambda_handler as query_handler
 
 # --- 2. ROBUST JUDGE CLASS (Vertex AI) ---
 class GeminiDeepEvalLLM(DeepEvalBaseLLM):
-    def __init__(self, model_name="gemini-2.0-flash"):
+    def __init__(self, model_name="gemini-3.0-flash"):
         self.model_name = model_name
         try:
             credentials, project_id = default()

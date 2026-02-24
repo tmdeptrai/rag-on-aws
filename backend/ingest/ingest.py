@@ -145,7 +145,7 @@ def ingest_graph_summary(full_text: str, metadata: Dict):
         """
         
         summary_resp = genai_client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-3.0-flash",
             contents=summary_prompt
         )
         summary_text = summary_resp.text
@@ -172,7 +172,7 @@ def ingest_graph_summary(full_text: str, metadata: Dict):
         }
 
         response = genai_client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-3.0-flash",
             contents=f"Extract knowledge triples from this summary. Use active, precise verbs (e.g., 'INVENTED', 'LOCATED_IN'). Summary: {summary_text}",
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
