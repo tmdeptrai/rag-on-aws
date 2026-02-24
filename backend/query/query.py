@@ -118,7 +118,7 @@ def graph_search(question) -> List[dict]:
         """
         
         response = client.models.generate_content(
-            model="gemini-3.0-flash", 
+            model="gemini-2.5-flash", 
             contents=prompt
         )
         cypher = response.text.strip().replace("```cypher", "").replace("```", "")
@@ -195,7 +195,7 @@ def lambda_handler(event, context):
         """
 
         response = client.models.generate_content(
-            model="gemini-3.0-flash",
+            model="gemini-2.5-flash",
             contents=question,
             config=types.GenerateContentConfig(
                 system_instruction=system_instruction,
